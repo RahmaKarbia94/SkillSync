@@ -1,0 +1,74 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: softskills-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - MONGO_URI=mongodb://mongo_user:mongo_password@mongodb:27017
+      - MONGO_DB_NAME=softskills_platform
+      - APP_PORT=8080
+      - APP_ENV=development
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRY_HOURS=24
+      - AWS_REGION=us-east-1
+      - AWS_S3_BUCKET=articulate-go-media
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_S3_ENDPOINT=http://minio:9000
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - WORKER_POOL_SIZE=4
+      - WORKER_QUEUE_SIZE=100
+    volumes:
+      - .:/app
+      - go-mod-cache:/go/pkg/mod
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - softskills-net
+    restart: unless-stopped
+  mongodb:
+    image: mongo:7.0
+    container_name: softskills-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=mongo_user
+      - MONGO_INITDB_ROOT_PASSWORD=mongo_password
+      - MONGO_INITDB_DATABASE=softskills_platform
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - softskills-net
+    restart: unless-stopped
+  minio:
+    image: minio/minio:latest
+    container_name: softskills-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - softskills-net
+    restart: unless-stopped
+volumes:
+  mongodb-data:
+  go-mod-cache:
+  minio-data:
+networks:
+  softskills-net:
+    driver: bridge
