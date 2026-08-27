@@ -8,9 +8,12 @@ import '../../../core/theme/glass_theme.dart';
 import '../providers/webrtc_provider.dart';
 
 class AssessmentScreen extends ConsumerStatefulWidget {
-  const AssessmentScreen({super.key, required this.sessionId});
+  const AssessmentScreen({super.key, this.sessionId});
 
-  final String sessionId;
+  /// Optional — if supplied (e.g. via route navigation), it is reused as the
+  /// real session id instead of creating a redundant new one when the user
+  /// taps Start.
+  final String? sessionId;
 
   @override
   ConsumerState<AssessmentScreen> createState() => _AssessmentScreenState();
@@ -47,20 +50,31 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
         status == WebRTCSessionStatus.permissionDenied;
   }
 
-  bool _canStop(WebRTCSessionStatus status) {
-    return status == WebRTCSessionStatus.connecting || status == WebRTCSessionStatus.connected;
+  bool _isBusyStarting(WebRTCSessionStatus status) {
+    return status == WebRTCSessionStatus.preparingSession ||
+        status == WebRTCSessionStatus.requestingPermissions ||
+        status == WebRTCSessionStatus.acquiringMedia ||
+        status == WebRTCSessionStatus.connecting;
   }
 
-  void _handleStart(String? token) {
+  bool _canStop(WebRTCSessionStatus status) {
+    return status == WebRTCSessionStatus.connecting || status == WebRTCSessionStatus.live;
+  }
+
+  Future<void> _handleStart(String? token) async {
     if (token == null) return;
 
-    const baseWsUrl = 'ws://localhost:8080';
-
-    ref.read(webRTCProvider.notifier).startAssessment(
-          baseWsUrl: baseWsUrl,
+    await ref.read(webRTCProvider.notifier).startAssessment(
+          baseWsUrl: 'ws://localhost:8080',
+          apiBaseUrl: 'http://localhost:8080',
           token: token,
-          roomId: widget.sessionId,
+          existingSessionId: widget.sessionId,
         );
+
+    final error = ref.read(webRTCProvider).errorMessage;
+    if (error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+    }
   }
 
   Future<void> _handleStop() async {
@@ -73,6 +87,21 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
     context.go('/dashboard');
   }
 
+  String _startLabel(WebRTCSessionStatus status) {
+    switch (status) {
+      case WebRTCSessionStatus.preparingSession:
+        return 'Preparing…';
+      case WebRTCSessionStatus.requestingPermissions:
+        return 'Requesting Access…';
+      case WebRTCSessionStatus.acquiringMedia:
+        return 'Starting Camera…';
+      case WebRTCSessionStatus.connecting:
+        return 'Connecting…';
+      default:
+        return 'Start Session';
+    }
+  }
+
   Widget _buildDeviceSelectors(WebRTCState state) {
     return GlassContainer(
       child: Column(
@@ -81,7 +110,7 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
           const Text('Camera', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: state.selectedVideoDeviceId,
+            value: state.selectedCameraId,
             isExpanded: true,
             dropdownColor: const Color(0xFF141826),
             style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -100,7 +129,7 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
                 .toList(),
             onChanged: (value) {
               if (value != null) {
-                ref.read(webRTCProvider.notifier).selectVideoDevice(value);
+                ref.read(webRTCProvider.notifier).selectCamera(value);
               }
             },
           ),
@@ -108,7 +137,7 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
           const Text('Microphone', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
-            value: state.selectedAudioDeviceId,
+            value: state.selectedMicId,
             isExpanded: true,
             dropdownColor: const Color(0xFF141826),
             style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -127,7 +156,7 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
                 .toList(),
             onChanged: (value) {
               if (value != null) {
-                ref.read(webRTCProvider.notifier).selectAudioDevice(value);
+                ref.read(webRTCProvider.notifier).selectMic(value);
               }
             },
           ),
@@ -210,8 +239,14 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: _canStart(webrtcState.status) ? () => _handleStart(authState.token) : null,
-                        icon: const Icon(Icons.videocam_outlined),
-                        label: const Text('Start Session'),
+                        icon: _isBusyStarting(webrtcState.status)
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              )
+                            : const Icon(Icons.videocam_outlined),
+                        label: Text(_startLabel(webrtcState.status)),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -246,10 +281,12 @@ class _StatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (String label, Color color) = switch (status) {
       WebRTCSessionStatus.idle => ('Idle', Colors.white54),
+      WebRTCSessionStatus.preparingSession => ('Preparing', Colors.amber),
       WebRTCSessionStatus.requestingPermissions => ('Requesting Access', Colors.amber),
       WebRTCSessionStatus.permissionDenied => ('Permission Denied', Colors.redAccent),
+      WebRTCSessionStatus.acquiringMedia => ('Starting Camera', Colors.amber),
       WebRTCSessionStatus.connecting => ('Connecting', Colors.amber),
-      WebRTCSessionStatus.connected => ('Live', Colors.greenAccent),
+      WebRTCSessionStatus.live => ('Live', Colors.greenAccent),
       WebRTCSessionStatus.failed => ('Failed', Colors.redAccent),
       WebRTCSessionStatus.ended => ('Ended', Colors.white54),
     };
