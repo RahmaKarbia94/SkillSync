@@ -4,6 +4,18 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'signaling_client.dart';
 
+class MediaDeviceOption {
+  const MediaDeviceOption({
+    required this.deviceId,
+    required this.label,
+    required this.kind,
+  });
+
+  final String deviceId;
+  final String label;
+  final String kind; // 'videoinput' | 'audioinput'
+}
+
 class WebRTCService {
   WebRTCService({required this.signalingClient});
 
@@ -23,14 +35,49 @@ class WebRTCService {
   Stream<RTCPeerConnectionState> get onConnectionStateChange => _connectionStateController.stream;
   Stream<RTCIceConnectionState> get onIceConnectionStateChange => _iceConnectionStateController.stream;
 
-  Future<MediaStream> startLocalMedia({bool audio = true, bool video = true}) async {
+  Future<List<MediaDeviceOption>> getAvailableDevices() async {
+    final devices = await navigator.mediaDevices.getSources();
+    final options = <MediaDeviceOption>[];
+    var videoIndex = 0;
+    var audioIndex = 0;
+
+    for (final d in devices) {
+      final kind = d.kind ?? '';
+      if (kind != 'videoinput' && kind != 'audioinput') continue;
+
+      var label = d.label ?? '';
+      if (label.isEmpty) {
+        if (kind == 'videoinput') {
+          videoIndex++;
+          label = 'Camera $videoIndex';
+        } else {
+          audioIndex++;
+          label = 'Microphone $audioIndex';
+        }
+      }
+
+      options.add(MediaDeviceOption(deviceId: d.deviceId ?? '', label: label, kind: kind));
+    }
+
+    return options;
+  }
+
+  Future<MediaStream> startLocalMedia({
+    bool audio = true,
+    bool video = true,
+    String? videoDeviceId,
+    String? audioDeviceId,
+  }) async {
     final constraints = <String, dynamic>{
-      'audio': audio,
+      'audio': audio
+          ? (audioDeviceId != null ? {'deviceId': audioDeviceId} : true)
+          : false,
       'video': video
           ? {
               'facingMode': 'user',
               'width': {'ideal': 1280},
               'height': {'ideal': 720},
+              if (videoDeviceId != null) 'deviceId': videoDeviceId,
             }
           : false,
     };

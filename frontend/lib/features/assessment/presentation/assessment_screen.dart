@@ -24,6 +24,7 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
   void initState() {
     super.initState();
     _initRenderer();
+    ref.read(webRTCProvider.notifier).loadDevices();
   }
 
   Future<void> _initRenderer() async {
@@ -72,10 +73,74 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
     context.go('/dashboard');
   }
 
+  Widget _buildDeviceSelectors(WebRTCState state) {
+    return GlassContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Camera', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            value: state.selectedVideoDeviceId,
+            isExpanded: true,
+            dropdownColor: const Color(0xFF141826),
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.06),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
+              ),
+            ),
+            hint: const Text('No camera found', style: TextStyle(color: Colors.white38)),
+            items: state.videoDevices
+                .map((d) => DropdownMenuItem(value: d.deviceId, child: Text(d.label, overflow: TextOverflow.ellipsis)))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(webRTCProvider.notifier).selectVideoDevice(value);
+              }
+            },
+          ),
+          const SizedBox(height: 16),
+          const Text('Microphone', style: TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<String>(
+            value: state.selectedAudioDeviceId,
+            isExpanded: true,
+            dropdownColor: const Color(0xFF141826),
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.white.withOpacity(0.06),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.15)),
+              ),
+            ),
+            hint: const Text('No microphone found', style: TextStyle(color: Colors.white38)),
+            items: state.audioDevices
+                .map((d) => DropdownMenuItem(value: d.deviceId, child: Text(d.label, overflow: TextOverflow.ellipsis)))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                ref.read(webRTCProvider.notifier).selectAudioDevice(value);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final webrtcState = ref.watch(webRTCProvider);
     final authState = ref.watch(authProvider);
+    final showDeviceSelectors = _canStart(webrtcState.status);
 
     ref.listen(webRTCProvider, (previous, next) {
       if (_rendererInitialized) {
@@ -111,7 +176,11 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
                     _StatusBadge(status: webrtcState.status),
                   ],
                 ),
-                const SizedBox(height: 20),
+                if (showDeviceSelectors) ...[
+                  const SizedBox(height: 16),
+                  _buildDeviceSelectors(webrtcState),
+                ],
+                const SizedBox(height: 16),
                 Expanded(
                   child: GlassContainer(
                     padding: const EdgeInsets.all(4),

@@ -22,22 +22,38 @@ class WebRTCState {
     this.status = WebRTCSessionStatus.idle,
     this.localStream,
     this.errorMessage,
+    this.videoDevices = const [],
+    this.audioDevices = const [],
+    this.selectedVideoDeviceId,
+    this.selectedAudioDeviceId,
   });
 
   final WebRTCSessionStatus status;
   final MediaStream? localStream;
   final String? errorMessage;
+  final List<MediaDeviceOption> videoDevices;
+  final List<MediaDeviceOption> audioDevices;
+  final String? selectedVideoDeviceId;
+  final String? selectedAudioDeviceId;
 
   WebRTCState copyWith({
     WebRTCSessionStatus? status,
     MediaStream? localStream,
     String? errorMessage,
     bool clearError = false,
+    List<MediaDeviceOption>? videoDevices,
+    List<MediaDeviceOption>? audioDevices,
+    String? selectedVideoDeviceId,
+    String? selectedAudioDeviceId,
   }) {
     return WebRTCState(
       status: status ?? this.status,
       localStream: localStream ?? this.localStream,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      videoDevices: videoDevices ?? this.videoDevices,
+      audioDevices: audioDevices ?? this.audioDevices,
+      selectedVideoDeviceId: selectedVideoDeviceId ?? this.selectedVideoDeviceId,
+      selectedAudioDeviceId: selectedAudioDeviceId ?? this.selectedAudioDeviceId,
     );
   }
 }
@@ -81,6 +97,33 @@ class WebRTCNotifier extends Notifier<WebRTCState> {
     });
 
     return const WebRTCState();
+  }
+
+  Future<void> loadDevices() async {
+    try {
+      final devices = await _service.getAvailableDevices();
+      final videoDevices = devices.where((d) => d.kind == 'videoinput').toList();
+      final audioDevices = devices.where((d) => d.kind == 'audioinput').toList();
+
+      state = state.copyWith(
+        videoDevices: videoDevices,
+        audioDevices: audioDevices,
+        selectedVideoDeviceId: state.selectedVideoDeviceId ??
+            (videoDevices.isNotEmpty ? videoDevices.first.deviceId : null),
+        selectedAudioDeviceId: state.selectedAudioDeviceId ??
+            (audioDevices.isNotEmpty ? audioDevices.first.deviceId : null),
+      );
+    } catch (e) {
+      state = state.copyWith(errorMessage: 'Failed to load devices: $e');
+    }
+  }
+
+  void selectVideoDevice(String deviceId) {
+    state = state.copyWith(selectedVideoDeviceId: deviceId);
+  }
+
+  void selectAudioDevice(String deviceId) {
+    state = state.copyWith(selectedAudioDeviceId: deviceId);
   }
 
   void _handlePeerConnectionState(RTCPeerConnectionState connState) {
@@ -153,7 +196,10 @@ class WebRTCNotifier extends Notifier<WebRTCState> {
     state = state.copyWith(status: WebRTCSessionStatus.connecting);
 
     try {
-      await _service.startLocalMedia();
+      await _service.startLocalMedia(
+        videoDeviceId: state.selectedVideoDeviceId,
+        audioDeviceId: state.selectedAudioDeviceId,
+      );
       await _service.startSession(baseWsUrl: baseWsUrl, token: token, roomId: roomId);
     } catch (e) {
       state = state.copyWith(status: WebRTCSessionStatus.failed, errorMessage: e.toString());
@@ -163,7 +209,7 @@ class WebRTCNotifier extends Notifier<WebRTCState> {
   Future<void> stopAssessment() async {
     await _service.stopSession();
     await _service.stopLocalMedia();
-    state = const WebRTCState(status: WebRTCSessionStatus.ended);
+    state = state.copyWith(status: WebRTCSessionStatus.ended);
   }
 }
 
