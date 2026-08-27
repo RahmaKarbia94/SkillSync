@@ -1,6 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/glass_theme.dart';
@@ -61,8 +62,14 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
         );
   }
 
-  void _handleStop() {
-    ref.read(webRTCProvider.notifier).stopAssessment();
+  Future<void> _handleStop() async {
+    await ref.read(webRTCProvider.notifier).stopAssessment();
+    if (!mounted) return;
+    context.go('/dashboard');
+  }
+
+  void _handleBack() {
+    context.go('/dashboard');
   }
 
   @override
@@ -88,9 +95,18 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Assessment Session',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_back, color: Colors.white70),
+                          onPressed: _handleBack,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Assessment Session',
+                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ],
                     ),
                     _StatusBadge(status: webrtcState.status),
                   ],
@@ -132,7 +148,7 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _canStop(webrtcState.status) ? _handleStop : null,
+                        onPressed: _canStop(webrtcState.status) ? () => _handleStop() : null,
                         icon: const Icon(Icons.call_end_outlined),
                         label: const Text('End Session'),
                         style: OutlinedButton.styleFrom(

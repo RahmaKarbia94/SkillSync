@@ -5,11 +5,9 @@ import 'package:go_router/go_router.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/glass_theme.dart';
 import '../../assessment/data/session_api.dart';
+import 'widgets/notification_bell.dart';
 
-// Stands in for a real candidate roster/picker feature, not yet built.
-// Once recruiters can browse multiple candidates, this constant is replaced
-// by the recruiter's actual selection.
-const _testCandidateId = '6a765e952563da42356fae65';
+const _testCandidateId = '6a810f08796e48e5f051e7dc';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -37,7 +35,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (token == null) return;
 
     setState(() => _isStartingSession = true);
-
     try {
       final api = SessionApi(baseUrl: 'http://localhost:8080', token: token);
       final sessionId = await api.startSession();
@@ -45,24 +42,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       context.push('/assessment/$sessionId');
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to start session: $e')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to start session: $e')));
     } finally {
-      if (mounted) {
-        setState(() => _isStartingSession = false);
-      }
+      if (mounted) setState(() => _isStartingSession = false);
     }
   }
 
   String _formatDate(DateTime dt) {
     final local = dt.toLocal();
-    final y = local.year.toString().padLeft(4, '0');
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final h = local.hour.toString().padLeft(2, '0');
-    final min = local.minute.toString().padLeft(2, '0');
-    return '$y-$m-$d $h:$min';
+    return '${local.year.toString().padLeft(4, '0')}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
   Color _statusColor(String status) {
@@ -97,13 +86,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   children: [
                     Text(
                       'Dashboard',
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.logout, color: Colors.white70),
-                      onPressed: () => ref.read(authProvider.notifier).logout(),
+                    Row(
+                      children: [
+                        const NotificationBell(),
+                        IconButton(
+                          icon: const Icon(Icons.logout, color: Colors.white70),
+                          onPressed: () => ref.read(authProvider.notifier).logout(),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -112,26 +104,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Signed in as',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.white60,
-                            ),
-                      ),
+                      Text('Signed in as', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white60)),
                       const SizedBox(height: 4),
                       Text(
                         authState.role.name.toUpperCase(),
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 16),
-                Expanded(
-                  child: isRecruiter ? _buildRecruiterView(context) : _buildCandidateView(context),
-                ),
+                Expanded(child: isRecruiter ? _buildRecruiterView(context) : _buildCandidateView(context)),
               ],
             ),
           ),
@@ -165,32 +148,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-
         if (snapshot.hasError) {
           return GlassContainer(
             child: Center(
-              child: Text(
-                'Failed to load sessions: ${snapshot.error}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.redAccent),
-              ),
+              child: Text('Failed to load sessions: ${snapshot.error}',
+                  textAlign: TextAlign.center, style: const TextStyle(color: Colors.redAccent)),
             ),
           );
         }
-
         final sessions = snapshot.data ?? [];
-
         if (sessions.isEmpty) {
           return GlassContainer(
             child: Center(
-              child: Text(
-                'No sessions yet.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white60),
-              ),
+              child: Text('No sessions yet.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white60)),
             ),
           );
         }
-
         return ListView.separated(
           itemCount: sessions.length,
           separatorBuilder: (_, __) => const SizedBox(height: 12),
@@ -205,30 +179,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     Container(
                       width: 10,
                       height: 10,
-                      decoration: BoxDecoration(
-                        color: _statusColor(session.status),
-                        shape: BoxShape.circle,
-                      ),
+                      decoration: BoxDecoration(color: _statusColor(session.status), shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            session.status.toUpperCase(),
-                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                          ),
+                          Text(session.status.toUpperCase(),
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
                           const SizedBox(height: 2),
-                          Text(
-                            _formatDate(session.createdAt),
-                            style: const TextStyle(color: Colors.white60, fontSize: 12),
-                          ),
+                          Text(_formatDate(session.createdAt), style: const TextStyle(color: Colors.white60, fontSize: 12)),
                         ],
                       ),
                     ),
-                    if (session.hasMedia)
-                      const Icon(Icons.videocam_outlined, color: Colors.white38, size: 18),
+                    if (session.hasMedia) const Icon(Icons.videocam_outlined, color: Colors.white38, size: 18),
                     const SizedBox(width: 8),
                     const Icon(Icons.chevron_right, color: Colors.white38),
                   ],

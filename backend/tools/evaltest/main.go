@@ -13,6 +13,7 @@ import (
     "articulate-go/internal/ai"
     "articulate-go/internal/db"
     "articulate-go/internal/services"
+    ws "articulate-go/internal/websocket"
 )
 
 func main() {
@@ -27,11 +28,17 @@ func main() {
     database := client.Database(os.Getenv("MONGO_DB_NAME"))
     sessions := database.Collection("sessions")
 
+    // Real test candidate id, so the notification actually reaches a connected client.
+    candidateID, err := primitive.ObjectIDFromHex("6a810f08796e48e5f051e7dc")
+    if err != nil {
+        log.Fatalf("invalid candidate id: %v", err)
+    }
+
     testTranscript := "Um, so, like, I think the main challenge was, you know, communication between teams. We had to, um, basically restructure how we, like, shared updates daily."
 
     testSession := bson.M{
         "_id":          primitive.NewObjectID(),
-        "candidate_id": primitive.NewObjectID(),
+        "candidate_id": candidateID,
         "status":       "completed",
         "transcript":   testTranscript,
         "created_at":   time.Now().UTC(),
@@ -51,7 +58,10 @@ func main() {
     }
     fmt.Println("LLM client initialized")
 
-    evaluationService := services.NewEvaluationService(llmClient, database)
+    notificationHub := ws.NewNotificationHub()
+    go notificationHub.Run()
+
+    evaluationService := services.NewEvaluationService(llmClient, database, notificationHub)
 
     if err := evaluationService.ProcessEvaluation(ctx, sessionID); err != nil {
         log.Fatalf("evaluation failed: %v", err)

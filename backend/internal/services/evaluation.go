@@ -65,7 +65,7 @@ func (s *EvaluationService) ProcessEvaluation(ctx context.Context, sessionID str
 	evaluation.ID = primitive.NewObjectID()
 	evaluation.SessionID = sessionObjectID
 	evaluation.CandidateID = session.CandidateID
-	evaluation.ModelVersion = "llama-3.3-70b-versatile"
+	evaluation.ModelVersion = "openai/gpt-oss-120b"
 	evaluation.ProcessingStatus = models.ProcessingStatusCompleted
 	evaluation.EvaluatedAt = &now
 	evaluation.CreatedAt = now
@@ -98,7 +98,7 @@ func (s *EvaluationService) markFailed(sessionID, candidateID primitive.ObjectID
 		ID:                 primitive.NewObjectID(),
 		SessionID:          sessionID,
 		CandidateID:        candidateID,
-		ModelVersion:       "llama-3.3-70b-versatile",
+		ModelVersion:       "openai/gpt-oss-120b",
 		ProcessingStatus:   models.ProcessingStatusFailed,
 		ProcessingErrorMsg: cause.Error(),
 		CreatedAt:          now,

@@ -161,6 +161,7 @@ func (h *NotificationHub) Notify(userID string, notification Notification) {
 		recipients = append(recipients, c)
 	}
 	h.mu.RUnlock()
+	log.Printf("notification hub: attempting delivery to user %s, %d active client(s)", userID, len(recipients))
 
 	for _, c := range recipients {
 		select {

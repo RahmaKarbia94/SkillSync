@@ -77,7 +77,7 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	router := routes.SetupRouter(client, database, notificationHub)
+	router := routes.SetupRouter(client, database, notificationHub, dispatcher)
 
 	srv := &http.Server{
 		Addr:         ":" + port,

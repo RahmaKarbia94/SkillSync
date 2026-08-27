@@ -53,7 +53,7 @@ func NewLLMClient() (*LLMClient, error) {
 
 	model := os.Getenv("LLM_MODEL")
 	if model == "" {
-		model = "llama-3.3-70b-versatile"
+		model = "openai/gpt-oss-120b"
 	}
 
 	return &LLMClient{
