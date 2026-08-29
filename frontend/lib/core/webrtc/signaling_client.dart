@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -111,23 +111,23 @@ class SignalingClient {
   Stream<SignalMessage> get messages => _messageController.stream;
   bool get isConnected => _socket != null;
 
-  /// [sessionId] must be the real, dynamic session id returned by
-  /// `POST /api/v1/sessions/start` — never a hardcoded placeholder. It is
-  /// carried over the wire as the `room_id` query parameter, matching the
-  /// Go backend's existing, unaltered signaling contract.
+  /// [roomId] must be the real, dynamic session id returned by
+  /// `POST /api/v1/sessions/start` — never a hardcoded placeholder. Carried
+  /// over the wire as the `room_id` query parameter, matching the Go
+  /// backend's existing, unaltered signaling contract.
   Future<void> connect({
     required String baseUrl,
     required String token,
-    required String sessionId,
+    required String roomId,
   }) async {
-    if (!_sessionIdPattern.hasMatch(sessionId)) {
+    if (!_sessionIdPattern.hasMatch(roomId)) {
       throw SignalingException(
-        'Invalid session id "$sessionId" — expected a real session id from '
+        'Invalid session id "$roomId" — expected a real session id from '
         'the backend, not a placeholder value.',
       );
     }
 
-    final uri = Uri.parse('$baseUrl/ws/signaling?token=$token&room_id=$sessionId');
+    final uri = Uri.parse('$baseUrl/ws/signaling?token=$token&room_id=$roomId');
     _socket = await WebSocket.connect(uri.toString());
 
     _socket!.listen(
