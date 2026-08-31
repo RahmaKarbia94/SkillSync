@@ -10,9 +10,6 @@ import '../providers/webrtc_provider.dart';
 class AssessmentScreen extends ConsumerStatefulWidget {
   const AssessmentScreen({super.key, this.sessionId});
 
-  /// Optional — if supplied (e.g. via route navigation), it is reused as the
-  /// real session id instead of creating a redundant new one when the user
-  /// taps Start.
   final String? sessionId;
 
   @override
@@ -22,6 +19,7 @@ class AssessmentScreen extends ConsumerStatefulWidget {
 class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
   final RTCVideoRenderer _localRenderer = RTCVideoRenderer();
   bool _rendererInitialized = false;
+  bool _isEnding = false;
 
   @override
   void initState() {
@@ -78,9 +76,18 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
   }
 
   Future<void> _handleStop() async {
-    await ref.read(webRTCProvider.notifier).stopAssessment();
+    setState(() => _isEnding = true);
+
+    final sessionId = ref.read(webRTCProvider).sessionId;
+    await ref.read(webRTCProvider.notifier).endSession();
+
     if (!mounted) return;
-    context.go('/dashboard');
+
+    if (sessionId != null) {
+      context.go('/processing/$sessionId');
+    } else {
+      context.go('/dashboard');
+    }
   }
 
   void _handleBack() {
@@ -165,11 +172,39 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
     );
   }
 
+  Widget _buildRecordingIndicator() {
+    return Positioned(
+      top: 16,
+      left: 16,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withOpacity(0.2)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: 6),
+            const Text('REC', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final webrtcState = ref.watch(webRTCProvider);
     final authState = ref.watch(authProvider);
     final showDeviceSelectors = _canStart(webrtcState.status);
+    final isLive = webrtcState.status == WebRTCSessionStatus.live;
 
     ref.listen(webRTCProvider, (previous, next) {
       if (_rendererInitialized) {
@@ -213,15 +248,22 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
                 Expanded(
                   child: GlassContainer(
                     padding: const EdgeInsets.all(4),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(20),
-                      child: _rendererInitialized
-                          ? RTCVideoView(
-                              _localRenderer,
-                              mirror: true,
-                              objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
-                            )
-                          : const Center(child: CircularProgressIndicator()),
+                    child: Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: SizedBox.expand(
+                            child: _rendererInitialized
+                                ? RTCVideoView(
+                                    _localRenderer,
+                                    mirror: true,
+                                    objectFit: RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
+                                  )
+                                : const Center(child: CircularProgressIndicator()),
+                          ),
+                        ),
+                        if (isLive) _buildRecordingIndicator(),
+                      ],
                     ),
                   ),
                 ),
@@ -252,9 +294,15 @@ class _AssessmentScreenState extends ConsumerState<AssessmentScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: OutlinedButton.icon(
-                        onPressed: _canStop(webrtcState.status) ? () => _handleStop() : null,
-                        icon: const Icon(Icons.call_end_outlined),
-                        label: const Text('End Session'),
+                        onPressed: (_canStop(webrtcState.status) && !_isEnding) ? _handleStop : null,
+                        icon: _isEnding
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.redAccent),
+                              )
+                            : const Icon(Icons.call_end_outlined),
+                        label: Text(_isEnding ? 'Ending…' : 'End Assessment'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.redAccent,
                           side: const BorderSide(color: Colors.redAccent),
@@ -287,6 +335,7 @@ class _StatusBadge extends StatelessWidget {
       WebRTCSessionStatus.acquiringMedia => ('Starting Camera', Colors.amber),
       WebRTCSessionStatus.connecting => ('Connecting', Colors.amber),
       WebRTCSessionStatus.live => ('Live', Colors.greenAccent),
+      WebRTCSessionStatus.processing => ('Processing', Colors.amber),
       WebRTCSessionStatus.failed => ('Failed', Colors.redAccent),
       WebRTCSessionStatus.ended => ('Ended', Colors.white54),
     };

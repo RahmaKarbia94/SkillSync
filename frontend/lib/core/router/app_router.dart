@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/assessment/presentation/assessment_screen.dart';
+import '../../features/assessment/presentation/processing_screen.dart';
 import '../../features/auth/presentation/login_screen.dart';
 import '../../features/dashboard/presentation/dashboard_screen.dart';
 import '../../features/dashboard/presentation/results_screen.dart';
@@ -50,6 +51,12 @@ final goRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/assessment/:sessionId',
         builder: (context, state) => AssessmentScreen(
+          sessionId: state.pathParameters['sessionId'],
+        ),
+      ),
+      GoRoute(
+        path: '/processing/:sessionId',
+        builder: (context, state) => ProcessingScreen(
           sessionId: state.pathParameters['sessionId']!,
         ),
       ),

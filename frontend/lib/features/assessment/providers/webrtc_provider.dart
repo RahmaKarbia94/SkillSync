@@ -16,6 +16,7 @@ enum WebRTCSessionStatus {
   acquiringMedia,
   connecting,
   live,
+  processing,
   failed,
   ended,
 }
@@ -47,6 +48,7 @@ class WebRTCState {
     MediaStream? localStream,
     String? errorMessage,
     bool clearError = false,
+    bool clearLocalStream = false,
     List<MediaDeviceOption>? videoDevices,
     List<MediaDeviceOption>? audioDevices,
     String? selectedCameraId,
@@ -55,7 +57,7 @@ class WebRTCState {
     return WebRTCState(
       status: status ?? this.status,
       sessionId: sessionId ?? this.sessionId,
-      localStream: localStream ?? this.localStream,
+      localStream: clearLocalStream ? null : (localStream ?? this.localStream),
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       videoDevices: videoDevices ?? this.videoDevices,
       audioDevices: audioDevices ?? this.audioDevices,
@@ -91,7 +93,7 @@ class WebRTCNotifier extends Notifier<WebRTCState> {
     _service = ref.watch(webRTCServiceProvider);
 
     _streamSub = _service.onLocalStream.listen((stream) {
-      state = state.copyWith(localStream: stream);
+      state = state.copyWith(localStream: stream, clearLocalStream: stream == null);
     });
 
     _connectionSub = _service.onConnectionStateChange.listen(_handlePeerConnectionState);
@@ -132,6 +134,11 @@ class WebRTCNotifier extends Notifier<WebRTCState> {
   }
 
   void _handlePeerConnectionState(RTCPeerConnectionState connState) {
+    if (state.status == WebRTCSessionStatus.processing || state.status == WebRTCSessionStatus.ended) {
+      // Teardown already initiated deliberately via endSession(); ignore
+      // late-arriving connection callbacks so we don't clobber that state.
+      return;
+    }
     switch (connState) {
       case RTCPeerConnectionState.RTCPeerConnectionStateConnected:
         _markLive();
@@ -149,6 +156,9 @@ class WebRTCNotifier extends Notifier<WebRTCState> {
   }
 
   void _handleIceConnectionState(RTCIceConnectionState iceState) {
+    if (state.status == WebRTCSessionStatus.processing || state.status == WebRTCSessionStatus.ended) {
+      return;
+    }
     switch (iceState) {
       case RTCIceConnectionState.RTCIceConnectionStateConnected:
       case RTCIceConnectionState.RTCIceConnectionStateCompleted:
@@ -188,13 +198,6 @@ class WebRTCNotifier extends Notifier<WebRTCState> {
     }
   }
 
-  /// Orchestrates the full pre-flight sequence: create (or reuse) a real
-  /// session id -> acquire the local media stream using the user's exact
-  /// selected devices -> connect the signaling WebSocket with that id.
-  ///
-  /// [existingSessionId], if provided (e.g. a session already created by the
-  /// calling screen's navigation flow), is reused as-is rather than creating
-  /// a redundant duplicate session record.
   Future<void> startAssessment({
     required String baseWsUrl,
     required String apiBaseUrl,
@@ -248,10 +251,22 @@ class WebRTCNotifier extends Notifier<WebRTCState> {
     }
   }
 
-  Future<void> stopAssessment() async {
-    await _service.stopSession();
+  /// Cleanly tears down an active assessment session:
+  /// 1. Stops local media tracks first, releasing the camera/mic hardware
+  ///    immediately (turns off the OS-level camera/mic indicator lights).
+  /// 2. Closes the peer connection and signaling socket.
+  /// 3. Transitions to `processing`, signaling the UI to move to the screen
+  ///    that waits for the backend's AI pipeline notification.
+  Future<void> endSession() async {
     await _service.stopLocalMedia();
-    state = state.copyWith(status: WebRTCSessionStatus.ended);
+    await _service.stopSession();
+    state = state.copyWith(status: WebRTCSessionStatus.processing, clearError: true, clearLocalStream: true);
+  }
+
+  /// Resets to a fresh idle state — used once the processing screen has
+  /// handed off to Results/Dashboard, so a future assessment starts clean.
+  void reset() {
+    state = const WebRTCState();
   }
 }
 
