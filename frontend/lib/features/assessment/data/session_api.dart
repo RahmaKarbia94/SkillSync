@@ -9,6 +9,7 @@ class SessionSummary {
     required this.createdAt,
     this.completedAt,
     required this.hasMedia,
+    this.overallScore,
   });
 
   final String sessionId;
@@ -16,6 +17,11 @@ class SessionSummary {
   final DateTime createdAt;
   final DateTime? completedAt;
   final bool hasMedia;
+
+  /// Null until the AI evaluation pipeline finishes — the dashboard uses
+  /// its presence, not just `status`, to distinguish a session whose
+  /// recording finished from one whose evaluation is genuinely ready.
+  final double? overallScore;
 
   factory SessionSummary.fromJson(Map<String, dynamic> json) {
     return SessionSummary(
@@ -26,6 +32,7 @@ class SessionSummary {
           ? DateTime.tryParse(json['completed_at'] as String)
           : null,
       hasMedia: json['has_media'] as bool? ?? false,
+      overallScore: (json['overall_score'] as num?)?.toDouble(),
     );
   }
 }
