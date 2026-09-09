@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
@@ -13,7 +13,7 @@ class MediaDeviceOption {
 
   final String deviceId;
   final String label;
-  final String kind; // 'videoinput' | 'audioinput'
+  final String kind;
 }
 
 class WebRTCService {
@@ -36,27 +36,46 @@ class WebRTCService {
   Stream<RTCIceConnectionState> get onIceConnectionStateChange => _iceConnectionStateController.stream;
 
   Future<List<MediaDeviceOption>> getAvailableDevices() async {
-    final devices = await navigator.mediaDevices.getSources();
+    final dynamic rawDevices = await navigator.mediaDevices.getSources();
     final options = <MediaDeviceOption>[];
     var videoIndex = 0;
     var audioIndex = 0;
 
-    for (final d in devices) {
-      final kind = d.kind ?? '';
-      if (kind != 'videoinput' && kind != 'audioinput') continue;
+    for (final dynamic d in rawDevices as List<dynamic>) {
+      String? rawKind;
+      String? deviceId;
+      String? label;
 
-      var label = d.label ?? '';
-      if (label.isEmpty) {
-        if (kind == 'videoinput') {
-          videoIndex++;
-          label = 'Camera $videoIndex';
-        } else {
-          audioIndex++;
-          label = 'Microphone $audioIndex';
+      if (d is Map) {
+        rawKind = d['kind'] as String?;
+        deviceId = d['deviceId'] as String?;
+        label = d['label'] as String?;
+      } else {
+        try {
+          final dynamic dyn = d;
+          rawKind = dyn.kind as String?;
+          deviceId = dyn.deviceId as String?;
+          label = dyn.label as String?;
+        } catch (_) {
+          continue;
         }
       }
 
-      options.add(MediaDeviceOption(deviceId: d.deviceId ?? '', label: label, kind: kind));
+      if (rawKind != 'videoinput' && rawKind != 'audioinput') continue;
+      final String kind = rawKind!;
+
+      var resolvedLabel = label ?? '';
+      if (resolvedLabel.isEmpty) {
+        if (kind == 'videoinput') {
+          videoIndex++;
+          resolvedLabel = 'Camera $videoIndex';
+        } else {
+          audioIndex++;
+          resolvedLabel = 'Microphone $audioIndex';
+        }
+      }
+
+      options.add(MediaDeviceOption(deviceId: deviceId ?? '', label: resolvedLabel, kind: kind));
     }
 
     return options;
@@ -70,14 +89,14 @@ class WebRTCService {
   }) async {
     final constraints = <String, dynamic>{
       'audio': audio
-          ? (audioDeviceId != null ? {'deviceId': audioDeviceId} : true)
+          ? (audioDeviceId != null && audioDeviceId.isNotEmpty ? {'deviceId': audioDeviceId} : true)
           : false,
       'video': video
           ? {
               'facingMode': 'user',
               'width': {'ideal': 1280},
               'height': {'ideal': 720},
-              if (videoDeviceId != null) 'deviceId': videoDeviceId,
+              if (videoDeviceId != null && videoDeviceId.isNotEmpty) 'deviceId': videoDeviceId,
             }
           : false,
     };

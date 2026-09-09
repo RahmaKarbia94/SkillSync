@@ -1,9 +1,11 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/theme/glass_theme.dart';
 import '../data/evaluation_api.dart';
+import 'services/report_generator.dart';
 import 'widgets/skills_radar_chart.dart';
 
 final evaluationProvider = FutureProvider.family<EvaluationResult, String>((ref, sessionId) async {
@@ -31,7 +33,7 @@ class ResultsScreen extends ConsumerWidget {
           child: evaluationAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (error, _) => _buildError(context, ref, error),
-            data: (evaluation) => _buildResults(context, evaluation),
+            data: (evaluation) => _buildResults(context, ref, evaluation),
           ),
         ),
       ),
@@ -79,13 +81,14 @@ class ResultsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildResults(BuildContext context, EvaluationResult evaluation) {
+  Widget _buildResults(BuildContext context, WidgetRef ref, EvaluationResult evaluation) {
     final hasSkillData = evaluation.logicPacing.score > 0 ||
         evaluation.fillerWords.densityPer100Words > 0 ||
         evaluation.sentiment.confidence > 0;
 
     final clarity = (100 - evaluation.fillerWords.densityPer100Words).clamp(0, 100).toDouble();
     final confidence = (evaluation.sentiment.confidence * 100).clamp(0, 100).toDouble();
+    final token = ref.watch(authProvider).token ?? '';
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -95,10 +98,14 @@ class ResultsScreen extends ConsumerWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Assessment Results',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+              Expanded(
+                child: Text(
+                  'Assessment Results',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+                ),
               ),
+              _ExportButton(sessionId: evaluation.sessionId, token: token),
+              const SizedBox(width: 12),
               _ScoreBadge(score: evaluation.overallScore),
             ],
           ),
@@ -200,6 +207,61 @@ class ResultsScreen extends ConsumerWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _ExportButton extends StatefulWidget {
+  const _ExportButton({required this.sessionId, required this.token});
+
+  final String sessionId;
+  final String token;
+
+  @override
+  State<_ExportButton> createState() => _ExportButtonState();
+}
+
+class _ExportButtonState extends State<_ExportButton> {
+  bool _isGenerating = false;
+
+  Future<void> _handleExport() async {
+    setState(() => _isGenerating = true);
+    try {
+      final generator = ReportGenerator(baseUrl: 'http://localhost:8080', token: widget.token);
+      final bytes = await generator.generate(widget.sessionId);
+      await Printing.layoutPdf(
+        onLayout: (_) async => bytes,
+        name: 'SkillSync-Report-${widget.sessionId}.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to export report: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGenerating = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: _isGenerating ? null : _handleExport,
+      icon: _isGenerating
+          ? const SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white70),
+            )
+          : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+      label: Text(_isGenerating ? 'Generating…' : 'Export PDF'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.white70,
+        side: BorderSide(color: Colors.white.withOpacity(0.3)),
       ),
     );
   }
